@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>EZ.MinimalApi.Attributes</name>
+    </assembly>
+    <members>
+        <member name="T:EZ.MinimalApi.Attributes.AuthorizationAttribute">
+            <summary>
+            Add authorization requirements to an endpoint.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.DeleteAttribute">
+            <summary>
+            Marks a method as handling HTTP DELETE requests for the specified route.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.EndpointAttribute">
+            <summary>
+            Marks a class as an API endpoint.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.FilterAttribute">
+            <summary>
+            Adiciona um filtro ao endpoint
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.GetAttribute">
+            <summary>
+            Marks a method as handling HTTP GET requests for the specified route.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.GroupEndpointAttribute">
+            <summary>
+            Marks a class as belonging to a specific API group.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.NameAttribute">
+            <summary>
+            Define o nome do endpoint
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.PatchAttribute">
+            <summary>
+            Marks a method as handling HTTP PATCH requests for the specified route.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.PostAttribute">
+            <summary>
+            Marks a method as handling HTTP POST requests for the specified route.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.PutAttribute">
+            <summary>
+            Marks a method as handling HTTP PUT requests for the specified route.
+            </summary>
+        </member>
+        <member name="T:EZ.MinimalApi.Attributes.TagsAttribute">
+            <summary>
+            Adiciona tags ao endpoint
+            </summary>
+        </member>
+    </members>
+</doc>

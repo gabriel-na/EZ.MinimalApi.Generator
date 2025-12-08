@@ -1,0 +1,12 @@
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\bin\Release\netstandard2.1\EZ.MinimalApi.Attributes.deps.json
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\bin\Release\netstandard2.1\EZ.MinimalApi.Attributes.dll
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\bin\Release\netstandard2.1\EZ.MinimalApi.Attributes.pdb
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.csproj.AssemblyReference.cache
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.AssemblyInfoInputs.cache
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.AssemblyInfo.cs
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.csproj.CoreCompileInputs.cache
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.dll
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.pdb
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\bin\Release\netstandard2.1\EZ.MinimalApi.Attributes.xml
+C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\obj\Release\netstandard2.1\EZ.MinimalApi.Attributes.xml

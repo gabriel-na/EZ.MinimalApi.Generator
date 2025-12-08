@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>EZ.MinimalApi.Generator</id>
+    <version>0.4.2-beta4</version>
+    <authors>Gabriel Albuquerque</authors>
+    <description>Minimal API Source Generator for automatic endpoint mapping.</description>
+    <repository type="git" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\bin\Debug\netstandard2.1\EZ.MinimalApi.Generator.dll" target="analyzers\dotnet\cs\EZ.MinimalApi.Generator.dll" />
+    <file src="C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\bin\Debug\netstandard2.1\EZ.MinimalApi.Attributes.dll" target="lib\netstandard2.1\EZ.MinimalApi.Attributes.dll" />
+    <file src="C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\bin\Debug\netstandard2.1\EZ.MinimalApi.Attributes.xml" target="lib\netstandard2.1\EZ.MinimalApi.Attributes.xml" />
+  </files>
+</package>
