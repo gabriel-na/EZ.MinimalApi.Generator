@@ -1,0 +1,39 @@
+name: Publish NuGet Package
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+env:
+  NUGET_FEED_URL: https://api.nuget.org/v3/index.json 
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    if: startsWith(github.ref, 'refs/tags/v') 
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x 
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build and Pack NuGet Package
+      id: pack
+      run: |
+        VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+        echo "Package version: $VERSION"
+        dotnet pack -c Release /p:Version=$VERSION --output nupkg
+        
+    - name: Publish to NuGet
+      run: dotnet nuget push nupkg/*.nupkg --source ${{ env.NUGET_FEED_URL }} --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
