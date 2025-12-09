@@ -1,8 +1,0 @@
-is_global = true
-build_property.RootNamespace = EZ.MinimalApi.Attributes
-build_property.ProjectDir = C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Attributes\
-build_property.EnableComHosting = 
-build_property.EnableGeneratedComInterfaceComImportInterop = 
-build_property.CsWinRTUseWindowsUIXamlProjections = false
-build_property.EffectiveAnalysisLevelStyle = 
-build_property.EnableCodeStyleSeverity = 

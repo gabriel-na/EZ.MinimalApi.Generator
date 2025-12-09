@@ -1,5 +1,0 @@
-C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\obj\Debug\netstandard2.0\EZ.MinimalApi.Generator.csproj.AssemblyReference.cache
-C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\obj\Debug\netstandard2.0\EZ.MinimalApi.Generator.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\obj\Debug\netstandard2.0\EZ.MinimalApi.Generator.AssemblyInfoInputs.cache
-C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\obj\Debug\netstandard2.0\EZ.MinimalApi.Generator.AssemblyInfo.cs
-C:\Users\gabriel.albuquerque\projetos\ez_endpoints\src\EZ.MinimalApi.Generator\obj\Debug\netstandard2.0\EZ.MinimalApi.Generator.csproj.CoreCompileInputs.cache
