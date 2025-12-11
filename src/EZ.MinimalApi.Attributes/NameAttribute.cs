@@ -5,7 +5,7 @@ namespace EZ.MinimalApi.Attributes
     /// <summary>
     /// Define o nome do endpoint
     /// </summary>
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false)]
     public class NameAttribute : Attribute
     {
         public string EndpointName { get; }

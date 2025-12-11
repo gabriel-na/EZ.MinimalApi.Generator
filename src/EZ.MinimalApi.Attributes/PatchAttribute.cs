@@ -11,5 +11,9 @@ namespace EZ.MinimalApi.Attributes
         public PatchAttribute(string route) : base(route)
         {
         }
+
+        public PatchAttribute() : this("/")
+        {
+        }
     }
 }

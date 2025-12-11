@@ -6,7 +6,6 @@ using Microsoft.CodeAnalysis.Text;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -54,14 +53,6 @@ namespace EZ.MinimalApi.Generator
             if (!hasEndpoint)
                 return null;
 
-            var groupAttribute = classSymbol.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.Name == nameof(GroupEndpointAttribute));
-
-            string? groupName = null;
-
-            if (groupAttribute != null && groupAttribute.ConstructorArguments.Length > 0)
-                groupName = groupAttribute.ConstructorArguments[0].Value?.ToString();
-
             var methods = new List<MethodInfo>();
 
             foreach (var methodDeclaration in classDeclaration.Members.OfType<MethodDeclarationSyntax>())
@@ -84,7 +75,6 @@ namespace EZ.MinimalApi.Generator
             {
                 Namespace = classSymbol.ContainingNamespace.ToDisplayString(),
                 Name = classSymbol.Name,
-                GroupName = groupName,
                 Methods = methods,
                 Attributes = classSymbol.GetAttributes()
             };
@@ -105,32 +95,19 @@ namespace EZ.MinimalApi.Generator
             if (httpAttributes == null)
                 return null;
 
-            var httpMethod = httpAttributes.AttributeClass!.Name.Replace("Attribute", "");
-            var route = "/";
-
-            if (httpAttributes.ConstructorArguments.Length > 0)
-                route = httpAttributes.ConstructorArguments[0].Value?.ToString() ?? "/";
-
-            var authInfo = GetAuthorizationInfo(methodAttributes);
-            var filters = GetFilters(methodAttributes);
-            var tags = GetTags(methodAttributes);
-            var endpointName = GetName(methodAttributes);
-
             var hasBody = methodDeclaration.Body != null || methodDeclaration.ExpressionBody != null;
 
             if (!hasBody)
                 return null;
-
+            
+            var route = httpAttributes.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? "/";
+            
             return new MethodInfo
             {
                 MethodName = methodSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                HttpMethod = httpMethod,
+                HttpMethod = httpAttributes.AttributeClass!.Name.Replace("Attribute", ""),
                 Route = route,
-                Authorization = authInfo,
-                Filters = filters,
-                Tags = tags,
-                EndpointName = endpointName,
-                IsAsync = methodSymbol.IsAsync,
+                Attributes = methodAttributes
             };
         }
 
@@ -234,13 +211,79 @@ namespace EZ.MinimalApi.Generator
 
         private static string? GetName(ImmutableArray<AttributeData> attributes)
         {
-            var nameAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == "NameAttribute");
+            var nameAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(NameAttribute));
 
-            return nameAttribute != null && nameAttribute.ConstructorArguments.Length > 0 ?
-                nameAttribute.ConstructorArguments[0].Value?.ToString() :
-                null;
+            return nameAttribute?.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? null;
         }
 
+        private static string? GetSummary(ImmutableArray<AttributeData> attributes)
+        {
+            var summaryAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(SummaryAttribute));
+
+            return summaryAttribute?.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? null;
+        }
+
+        private static string? GetDescription(ImmutableArray<AttributeData> attributes)
+        {
+            var descriptionAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(DescriptionAttribute));
+
+            return descriptionAttribute?.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? null;
+        }
+
+        private static string? GetDisplayName(ImmutableArray<AttributeData> attributes)
+        {
+            var displayNameAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(DisplayNameAttribute));
+
+            return displayNameAttribute?.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? null;
+        }
+
+        private static bool GetAllowAnonymous(ImmutableArray<AttributeData> attributes)
+        {
+            var allowAnonymousAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(AllowAnonymousAttribute));
+
+            return allowAnonymousAttribute != null;
+        }
+
+        private static List<AcceptsInfo> GetAccepts(ImmutableArray<AttributeData> attributes)
+        {
+            var acceptsAttributes = attributes
+                .Where(a => a.AttributeClass?.MetadataName.StartsWith("Accepts") ?? false)
+                .ToList();
+
+            var acceptsList = new List<AcceptsInfo>();
+
+            foreach (var acceptAttribute in acceptsAttributes)
+            {
+                ITypeSymbol requestType = null;
+                string contentType = null;
+                List<string> additionalContentTypes = null;
+
+                if (acceptAttribute.AttributeClass.IsGenericType)
+                {
+                    requestType = acceptAttribute.AttributeClass.TypeArguments.First();    
+                    contentType = acceptAttribute.ConstructorArguments[0].Value?.ToString();
+                    additionalContentTypes = acceptAttribute.ConstructorArguments[1].Values.Cast<string>().ToList();
+                }
+                else
+                {
+                    requestType = acceptAttribute.ConstructorArguments[0].Value as ITypeSymbol;
+                    contentType = acceptAttribute.ConstructorArguments[1].Value?.ToString();
+                    additionalContentTypes = acceptAttribute.ConstructorArguments[2].Values.Cast<string>().ToList();
+                }
+
+                var acceptsInfo = new AcceptsInfo
+                {
+                    RequestType = requestType.ToDisplayString(FullyQualifiedWithoutGlobal),
+                    AdditionalContentTypes = additionalContentTypes,
+                    ContentType = contentType
+                };
+
+                acceptsList.Add(acceptsInfo);
+            }
+
+            return acceptsList;
+        }
+        
         private static void GenerateFiles(SourceProductionContext context, List<ClassInfo> classes)
         {
             foreach (var @class in classes)
@@ -263,18 +306,19 @@ namespace EZ.MinimalApi.Generator
                 writer.WriteLine("{");
                 writer.Indent++;
 
-                var hasGroup = !string.IsNullOrEmpty(@class.GroupName);
+                var groupName = @class.GetGroupName();
+                var hasGroup = !string.IsNullOrEmpty(groupName);
                 var root = hasGroup ? "group" : "app";
 
                 if (hasGroup)
                 {
-                    writer.WriteLine($"var group = app.MapGroup(\"{EscapeString(@class.GroupName)}\");");
+                    writer.WriteLine($"var group = app.MapGroup(\"{EscapeString(groupName!)}\")");
+                    writer.Indent++;
 
-                    var classFilters = GetFilters(@class.Attributes);
+                    AppendCommonMethods(writer, @class.Attributes);
 
-                    foreach (var filter in classFilters)
-                        writer.WriteLine($"group = group.AddEndpointFilter<{filter}>();");
-
+                    writer.Write(";");
+                    writer.Indent--;
                     writer.WriteLine();
                 }
 
@@ -285,10 +329,8 @@ namespace EZ.MinimalApi.Generator
                     writer.WriteLine($"{root}.Map{method.HttpMethod}(\"{EscapeString(method.Route)}\", {handler})");
                     writer.Indent++;
                     
-                    AppendAuthorization(writer, method);
-                    AppendFilters(writer, method);
-                    AppendTags(writer, method);
-                    AppendName(writer, method);
+                    AppendCommonMethods(writer, method.Attributes);
+                    AppendAccepts(writer, GetAccepts(method.Attributes));
                     
                     writer.Write(";");
                     writer.Indent--;
@@ -325,7 +367,7 @@ namespace EZ.MinimalApi.Generator
             writer.Indent++;
 
             foreach (var @class in classes)
-                writer.WriteLine($"EZ.MinimalApi.GeneratedEndpoints.{@class.Name}Extensions.Map{@class.Name}Endpoints(app);");
+                writer.WriteLine($"EZ.MinimalApi.GeneratedEndpoints.{@class.Name}Extensions.Map{@class.Name}(app);");
 
             writer.WriteLine();
             writer.WriteLine("return app;");
@@ -339,10 +381,22 @@ namespace EZ.MinimalApi.Generator
             context.AddSource("WebApplicationAggregatorExtensions.g.cs", SourceText.From(sw.ToString(), Encoding.UTF8));
         }
 
-        private static void AppendAuthorization(IndentedTextWriter writer, MethodInfo method)
+        private static void AppendCommonMethods(IndentedTextWriter writer, ImmutableArray<AttributeData> attributes)
         {
-            var authorization = method.Authorization;
-            if (authorization == null) return;
+            AppendFilters(writer, GetFilters(attributes));
+            AppendTags(writer, GetTags(attributes));
+            AppendSummary(writer, GetSummary(attributes));
+            AppendDescription(writer, GetDescription(attributes));
+            AppendName(writer, GetName(attributes));
+            AppendAuthorization(writer, GetAuthorizationInfo(attributes));
+            AppendAllowAnonymous(writer, GetAllowAnonymous(attributes));
+            AppendDisplayName(writer, GetDisplayName(attributes));
+        }
+
+        private static void AppendAuthorization(IndentedTextWriter writer, AuthorizationInfo? authorization)
+        {
+            if (authorization == null) 
+                return;
 
             switch (authorization.Mode)
             {
@@ -379,29 +433,69 @@ namespace EZ.MinimalApi.Generator
             }
         }
 
-        private static void AppendFilters(IndentedTextWriter writer, MethodInfo method)
+        private static void AppendFilters(IndentedTextWriter writer, List<string> filters)
         {
-            foreach (var filter in method.Filters)
+            if (filters == null)
+                return;
+
+            foreach (var filter in filters)
                 writer.WriteLine($".AddEndpointFilter<{filter}>()");
         }
 
-        private static void AppendTags(IndentedTextWriter writer, MethodInfo method)
+        private static void AppendTags(IndentedTextWriter writer, string[] tags)
         {
-            if (method.Tags != null && method.Tags.Length > 0)
+            if (tags != null && tags.Length > 0)
             {
-                var tagsStr = string.Join("\", \"", method.Tags.Select(EscapeString));
+                var tagsStr = string.Join("\", \"", tags.Select(EscapeString));
                 writer.WriteLine($".WithTags(\"{tagsStr}\")");
             }
         }
 
-        private static void AppendName(IndentedTextWriter writer, MethodInfo method)
+        private static void AppendName(IndentedTextWriter writer, string endpointName)
         {
-            if (!string.IsNullOrEmpty(method.EndpointName))
-            {
-                writer.WriteLine($".WithName(\"{EscapeString(method.EndpointName)}\")");
-            }
+            if (!string.IsNullOrEmpty(endpointName))
+                writer.WriteLine($".WithName(\"{EscapeString(endpointName)}\")");
         }
 
+        private static void AppendSummary(IndentedTextWriter writer, string summary)
+        {
+            if (!string.IsNullOrEmpty(summary))
+                writer.WriteLine($".WithSummary(\"{EscapeString(summary)}\")");
+        }
+
+        private static void AppendDescription(IndentedTextWriter writer, string description)
+        {
+            if (!string.IsNullOrEmpty(description))
+                writer.WriteLine($".WithDescription(\"{EscapeString(description)}\")");
+        }
+
+        private static void AppendAllowAnonymous(IndentedTextWriter writer, bool allowAnonymous)
+        {
+            if (allowAnonymous)
+                writer.WriteLine($".AllowAnonymous()");
+        }
+
+        private static void AppendDisplayName(IndentedTextWriter writer, string displayName)
+        {
+            if (!string.IsNullOrEmpty(displayName))
+                writer.WriteLine($".WithDisplayName(\"{EscapeString(displayName)}\")");
+        }
+
+        private static void AppendAccepts(IndentedTextWriter writer, List<AcceptsInfo> acceptsList)
+        {
+            if(acceptsList == null)
+                return;
+
+            foreach (var accepts in acceptsList)
+            {
+                var contentTypes = string.Join(", ", accepts.AdditionalContentTypes.Select(ct => $"\"{EscapeString(ct)}\""));
+
+                if (!string.IsNullOrWhiteSpace(contentTypes))
+                    contentTypes = $", {contentTypes}";
+
+                writer.WriteLine($".Accepts<{accepts.RequestType}>(\"{accepts.ContentType}\" {contentTypes})");
+            }
+        }
         private static string EscapeString(string input) =>
             input?.Replace("\\", "\\\\").Replace("\"", "\\\"") ?? "";
     }
