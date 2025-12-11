@@ -11,5 +11,9 @@ namespace EZ.MinimalApi.Attributes
         public DeleteAttribute(string route) : base(route)
         {
         }
+
+        public DeleteAttribute() : this("/")
+        {
+        }
     }
 }

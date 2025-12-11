@@ -11,5 +11,9 @@ namespace EZ.MinimalApi.Attributes
         public GetAttribute(string route) : base(route)
         {
         }
+
+        public GetAttribute() : this("/")
+        {
+        }
     }
 }

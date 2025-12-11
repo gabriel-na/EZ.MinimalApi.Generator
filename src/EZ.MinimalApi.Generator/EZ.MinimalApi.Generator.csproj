@@ -1,44 +1,47 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
 
-    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <IsRoslynComponent>true</IsRoslynComponent>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
-  </PropertyGroup>
+		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+		<IsRoslynComponent>true</IsRoslynComponent>
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+		<CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+	</PropertyGroup>
 
-  <PropertyGroup>
-    <PackageId>EZ.MinimalApi.Generator</PackageId>
-    <Version>0.1.0</Version>
-    <Authors>Gabriel Albuquerque</Authors>
-    <Description>Minimal API Source Generator for automatic endpoint mapping.</Description>
-    <PackageTags>source-generator;minimal-api;dotnet;webapi;code-generator</PackageTags>
-    <RepositoryUrl>https://github.com/gabriel-na/EZ.MinimalApi.Generator</RepositoryUrl>
-  </PropertyGroup>
+	<PropertyGroup>
+		<PackageId>EZ.MinimalApi.Generator</PackageId>
+		<Version>1.1.0</Version>
+		<Authors>Gabriel Albuquerque</Authors>
+		<Description>Minimal API Source Generator for automatic endpoint mapping.</Description>
+		<PackageTags>source-generator;minimal-api;dotnet;webapi;code-generator</PackageTags>
+		<RepositoryUrl>https://github.com/gabriel-na/EZ.MinimalApi.Generator</RepositoryUrl>
+		<PackageReleaseNotes>
+			Release notes can be found in https://github.com/gabriel-na/EZ.MinimalApi.Generator/releases
+		</PackageReleaseNotes>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Include="$(OutputPath)\EZ.MinimalApi.Generator.dll" 
-          Pack="true" 
-          PackagePath="analyzers/dotnet/cs" 
-          Visible="false" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="$(OutputPath)\EZ.MinimalApi.Generator.dll"
+			  Pack="true"
+			  PackagePath="analyzers/dotnet/cs"
+			  Visible="false" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\EZ.MinimalApi.Attributes\EZ.MinimalApi.Attributes.csproj" 
-      PrivateAssets="all"/>
-    <None Include="$(OutputPath)\EZ.MinimalApi.Attributes.dll" Pack="true" PackagePath="lib/netstandard2.1" />
-    <None Include="$(OutputPath)\EZ.MinimalApi.Attributes.xml" 
-          Pack="true" 
-          PackagePath="lib/netstandard2.1/" 
-          Condition="Exists('$(OutputPath)\EZ.MinimalApi.Attributes.xml')" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\EZ.MinimalApi.Attributes\EZ.MinimalApi.Attributes.csproj"
+		  PrivateAssets="all"/>
+		<None Include="$(OutputPath)\EZ.MinimalApi.Attributes.dll" Pack="true" PackagePath="lib/netstandard2.1" />
+		<None Include="$(OutputPath)\EZ.MinimalApi.Attributes.xml"
+			  Pack="true"
+			  PackagePath="lib/netstandard2.0/"
+			  Condition="Exists('$(OutputPath)\EZ.MinimalApi.Attributes.xml')" />
+	</ItemGroup>
 </Project>

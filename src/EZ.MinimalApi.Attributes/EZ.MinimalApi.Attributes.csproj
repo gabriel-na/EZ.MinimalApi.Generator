@@ -5,11 +5,6 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
 
-    <PackageId>MinimalApiGenerator.Attributes</PackageId>
-    <Version>2.2.0</Version>
-    <Authors>Gabriel Albuquerque</Authors>
-    <Description>Atributos para EZ.MinimalApi.Generator</Description>
-    <PackageTags>minimal-api;source-generator;aspnet;endpoints</PackageTags>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

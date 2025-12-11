@@ -11,5 +11,9 @@ namespace EZ.MinimalApi.Attributes
         public PostAttribute(string route) : base(route)
         {
         }
+
+        public PostAttribute() : this("/")
+        {
+        }
     }
 }

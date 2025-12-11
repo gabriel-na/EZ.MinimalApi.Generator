@@ -11,6 +11,9 @@ This library focuses on:
 
 ---
 
+## Where to use?
+Some attributes can only be used at class level (`[C]`), method level (`[M]`) or both (`[C|M]`).
+
 ## ✨ Features
 
 - `Get`, `Post`, `Put`, `Patch`, `Delete` attributes for routing  
@@ -18,10 +21,11 @@ This library focuses on:
 - Automatic group mapping via `GroupEndpoint`  
 - Inline delegate generation (no instance creation required)  
 - Supports:
-  - `RequireAuthorization` with policies, IAuthorizeData types, and AuthorizationPolicy
-  - Endpoint Filters
+  - Authorization with: policies, IAuthorizeData types, and AuthorizationPolicy
+  - Route naming with: Name, Summary, Description and DisplayName
+  - Filters
   - Tags
-  - Route naming
+  - Accepts
 - Fully compile-time, no reflection
 
 ---
@@ -53,6 +57,12 @@ public static class UserEndpoints
     {
         return await repository.GetByIdAsync(id);
     }
+
+    [Post] // default path is '/'
+    public static async Task CreateUser(UserDTO request, IUserRepository repository)
+    {
+        //ommited...
+    } 
 }
 ```
 
@@ -105,8 +115,7 @@ namespace EZ.MinimalApi.GeneratedEndpoints
 }
 ```
 
-
-## 📂 Grouping Endpoints
+## 📂 Grouping Endpoints <sup>`[C]`</sup>
 ```csharp
 [Endpoint]
 [GroupEndpoint("/users")]
@@ -129,7 +138,8 @@ var group = app.MapGroup("/users");
 group.MapGet("/{id}", ...);
 group.MapPost("/", ...);
 ```
-## 🔐 Authorization Examples
+
+## 🔐 Authorization Examples <sup>`[C|M]`</sup>
 ````csharp
 [Get("/admin")]
 
@@ -150,12 +160,12 @@ public IResult GetAdmin() => Results.Ok();
 Generated:
 
 ```csharp
-.RequireAuthorization("AdminPolicy")
+.RequireAuthorization("AdminPolicy");
 //(or the appropriate overload)
 ```
 
-## 🧩 Filters (Group-Level + Endpoint-Level)
-✔ Filters can be applied in two places:
+## 🧩 Filters <sup>`[C|M]`</sup>
+Filters can be applied in two places:
 
 - Class-level filters → Applied to the group
 - Method-level filters → Applied to individual endpoints
@@ -177,7 +187,7 @@ Generated:
 
 ```csharp
 var group = app.MapGroup("/users")
-group = group.AddEndpointFilter<GlobalFilter>(); // <-- class-level filter
+    .AddEndpointFilter<GlobalFilter>(); // <-- class-level filter
 
 group.MapGet("/{id}", async (Guid id, IUserRepository repo) =>
 {
@@ -186,7 +196,8 @@ group.MapGet("/{id}", async (Guid id, IUserRepository repo) =>
 .AddEndpointFilter<EndpointFilter>(); // <-- method-level filter
 ```
 
-## 🏷️ Tags
+## 🏷️ Tags <sup>`[C|M]`</sup>
+Can be used at class level or method level
 ```csharp
 [Tags("Users", "Read")]
 ```
@@ -194,18 +205,38 @@ group.MapGet("/{id}", async (Guid id, IUserRepository repo) =>
 Generated:
 
 ```csharp
-.WithTags("Users", "Read")
+.WithTags("Users", "Read");
 ```
 
-## 🏷 Route Names
+## 🏷 Route Names <sup>`[C|M]`</sup>
+Can be used at class level or method level
 ```csharp
-[Name("GetUserById")]
+[Name("Get user by ID")]
+[DisplayName("GetUserById")]
+[Description("Get user information by ID")]
+[Summary("Gets user information by ID or returns 404 if not found")]
 ```
 
 Generated:
 
 ```csharp
 .WithName("GetUserById")
+.WithDisplayName("GetUserById")
+.WithDescription("Get user information by ID")
+.WithSummary("Gets user information by ID or returns 404 if not found");
+```
+
+## Accepts <sup>`[M]`</sup>
+Specifies which content-type will be accepted based on the type of request body.
+Can be used multiple times.
+```csharp
+[Accpets<User>("application/json")]
+//or [Accepts(typeof(User), "application/json)]
+```
+
+Generated:
+```csharp
+.Accepts<User>("application/json");
 ```
 
 ## 🧪 Requirements
