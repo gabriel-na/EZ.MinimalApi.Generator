@@ -13,7 +13,7 @@
 
 	<PropertyGroup>
 		<PackageId>EZ.MinimalApi.Generator</PackageId>
-		<Version>1.1.0</Version>
+		<Version>1.2.0</Version>
 		<Authors>Gabriel Albuquerque</Authors>
 		<Description>Minimal API Source Generator for automatic endpoint mapping.</Description>
 		<PackageTags>source-generator;minimal-api;dotnet;webapi;code-generator</PackageTags>
@@ -29,19 +29,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="$(OutputPath)\EZ.MinimalApi.Generator.dll"
-			  Pack="true"
-			  PackagePath="analyzers/dotnet/cs"
-			  Visible="false" />
+		<None Include="$(OutputPath)\EZ.MinimalApi.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\EZ.MinimalApi.Attributes\EZ.MinimalApi.Attributes.csproj"
-		  PrivateAssets="all"/>
+		<ProjectReference Include="..\EZ.MinimalApi.Attributes\EZ.MinimalApi.Attributes.csproj" PrivateAssets="all" />
 		<None Include="$(OutputPath)\EZ.MinimalApi.Attributes.dll" Pack="true" PackagePath="lib/netstandard2.1" />
-		<None Include="$(OutputPath)\EZ.MinimalApi.Attributes.xml"
-			  Pack="true"
-			  PackagePath="lib/netstandard2.0/"
-			  Condition="Exists('$(OutputPath)\EZ.MinimalApi.Attributes.xml')" />
+		<None Include="$(OutputPath)\EZ.MinimalApi.Attributes.xml" Pack="true" PackagePath="lib/netstandard2.0/" Condition="Exists('$(OutputPath)\EZ.MinimalApi.Attributes.xml')" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Diagnostics\" />
 	</ItemGroup>
 </Project>

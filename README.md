@@ -26,6 +26,7 @@ Some attributes can only be used at class level (`[C]`), method level (`[M]`) or
   - Filters
   - Tags
   - Accepts
+  - AllowAnonynous
 - Fully compile-time, no reflection
 
 ---
@@ -52,25 +53,19 @@ namespace MyAwesomeApi.Endpoints;
 [Endpoint]
 public static class UserEndpoints
 {
-    [Get("/users/{id}")]
-    public static async Task<User> GetById(Guid id, IUserRepository repository)
-    {
-        return await repository.GetByIdAsync(id);
-    }
+    [Get]
+    public static IResult GetById() =>
+        Results.Ok();
 
-    [Post] // default path is '/'
-    public static async Task CreateUser(UserDTO request, IUserRepository repository)
-    {
-        //ommited...
-    } 
+    [Post]
+    public static IResult CreateUser() =>
+        Results.Created();
 }
 ```
 
 2. Call the generated extension method in `Program.cs`
 
 ```csharp
-using EZ.MinimalApi.Extensions;
-
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
@@ -79,13 +74,13 @@ app.MapCustomEndpoints(); // Generated automatically
 app.Run();
 ```
 
-## 🛠️ Generated Output
+## Generated Output
 
 The code above will produce:
 
 Aggregator class that wraps all the generated endpoints in one method call.
 ```csharp
-namespace EZ.MinimalApi.Extensions
+namespace Microsoft.AspNetCore.Builder
 {
 	public static class WebApplicationAggregatorExtensions
 	{
@@ -115,19 +110,19 @@ namespace EZ.MinimalApi.GeneratedEndpoints
 }
 ```
 
-## 📂 Grouping Endpoints <sup>`[C]`</sup>
+## Grouping<sup>`[C]`</sup>
 ```csharp
 [Endpoint]
 [GroupEndpoint("/users")]
-public class UserEndpoints
+public static class UserEndpoints
 {
     [Get("/{id}")]
-    public async Task<User> Get(Guid id, IUserRepository repo)
-        => await repo.GetByIdAsync(id);
+    public static IResult Get(Guid id, IUserRepository repo) => 
+        Results.Ok();
 
-    [Post("/")]
-    public async Task<User> Create(CreateUserRequest req, IUserRepository repo)
-        => await repo.CreateAsync(req);
+    [Post]
+    public static IResult Create() => 
+        Results.Created();
 }
 ```
 Generated:
@@ -139,32 +134,26 @@ group.MapGet("/{id}", ...);
 group.MapPost("/", ...);
 ```
 
-## 🔐 Authorization Examples <sup>`[C|M]`</sup>
+## Authorization<sup>`[C|M]`</sup>
 ````csharp
 [Get("/admin")]
-
-//By policy name
-[Authorization("AdminPolicy")]
-
-//Multiple policies
-[Authorization("Admin", "SuperUser")]
-
-//IAuthorizeData types
-[Authorization(typeof(MyCustomAuthorizeData))]
-
-//AuthorizationPolicy type
-[Authorization(typeof(AdminPolicy))]
-public IResult GetAdmin() => Results.Ok();
+[Authorization("AdminPolicy")] //By policy name
+[Authorization("Admin", "SuperUser")] //Multiple policies
+[Authorization(typeof(MyCustomAuthorizeData))] //IAuthorizeData types
+[Authorization(typeof(AdminPolicy))] //AuthorizationPolicy type
+public static IResult GetAdmin() => 
+    Results.Ok();
 ````
 
 Generated:
 
 ```csharp
-.RequireAuthorization("AdminPolicy");
+app.MapGet("/admin", ...)
+    .RequireAuthorization("AdminPolicy");
 //(or the appropriate overload)
 ```
 
-## 🧩 Filters <sup>`[C|M]`</sup>
+## Filters<sup>`[C|M]`</sup>
 Filters can be applied in two places:
 
 - Class-level filters → Applied to the group
@@ -174,12 +163,12 @@ Filters can be applied in two places:
 [Endpoint]
 [GroupEndpoint("/users")]
 [Filter<GlobalFilter>]      // applied to the group
-public class UserEndpoints
+public static class UserEndpoints
 {
-    [Get("/{id}")]
+    [Get]
     [Filter<EndpointFilter>] // applied only to this endpoint
-    public Task<User> GetUser(Guid id, IUserRepository repo)
-        => repo.GetUserAsync(id);
+    public static IResult Get() =>
+        Results.Ok();
 }
 ```
 
@@ -187,56 +176,136 @@ Generated:
 
 ```csharp
 var group = app.MapGroup("/users")
-    .AddEndpointFilter<GlobalFilter>(); // <-- class-level filter
+    .AddEndpointFilter<GlobalFilter>();
 
-group.MapGet("/{id}", async (Guid id, IUserRepository repo) =>
-{
-    return await repo.GetUserAsync(id);
-})
-.AddEndpointFilter<EndpointFilter>(); // <-- method-level filter
+group.MapGet("/{id}", ...)
+    .AddEndpointFilter<EndpointFilter>();
 ```
 
-## 🏷️ Tags <sup>`[C|M]`</sup>
+## Tags<sup>`[C|M]`</sup>
 Can be used at class level or method level
 ```csharp
+[Get]
 [Tags("Users", "Read")]
+public static IResult Get() =>
+    Results.Ok();
 ```
 
 Generated:
 
 ```csharp
-.WithTags("Users", "Read");
+app.MapGet("/", ...)
+    .WithTags("Users", "Read");
 ```
 
-## 🏷 Route Names <sup>`[C|M]`</sup>
+## Route Names<sup>`[C|M]`</sup>
 Can be used at class level or method level
 ```csharp
+[Get]
 [Name("Get user by ID")]
 [DisplayName("GetUserById")]
 [Description("Get user information by ID")]
 [Summary("Gets user information by ID or returns 404 if not found")]
+public static IResult Get() =>
+    Results.Ok();
 ```
 
 Generated:
 
 ```csharp
-.WithName("GetUserById")
-.WithDisplayName("GetUserById")
-.WithDescription("Get user information by ID")
-.WithSummary("Gets user information by ID or returns 404 if not found");
+app.MapGet("/", ...)
+    .WithName("GetUserById")
+    .WithDisplayName("GetUserById")
+    .WithDescription("Get user information by ID")
+    .WithSummary("Gets user information by ID or returns 404 if not found");
 ```
 
-## Accepts <sup>`[M]`</sup>
+## Accepts<sup>`[M]`</sup>
 Specifies which content-type will be accepted based on the type of request body.
 Can be used multiple times.
 ```csharp
+[Get]
 [Accpets<User>("application/json")]
-//or [Accepts(typeof(User), "application/json)]
+//or [Accepts(typeof(User), "application/json")]
+public static IResult Get() =>
+    Results.Ok();
 ```
 
 Generated:
 ```csharp
-.Accepts<User>("application/json");
+app.MapGet("/", ...)
+    .Accepts<User>("application/json");
+```
+
+## AllowAnonymous<sup>`[C|M]`</sup>
+Specifies if the group or endpoint can be accessed without authentication/authorization
+```csharp
+[Get]
+[AllowAnonymous]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .AllowAnonymous();
+```
+
+## AllowAnonymous<sup>`[C|M]`</sup>
+Specifies if the group or endpoint can be accessed without authentication/authorization
+```csharp
+[Get]
+[AllowAnonymous]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .AllowAnonymous();
+```
+
+## Produces<sup>`[C|M]`</sup>
+Specifies which status code the endpoint/group will return and for which response type.
+Can be used  multiple times for diferent status codes.
+The contentType and responseType parameters are optionals.
+```csharp
+[Get]
+[Produces<User>(200, "application/json")]
+//[Produces(200, typeof(User), "application/json")]
+//[Produces(200, typeof(User))]
+//[Produces(200)]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .Produces<User>(200, "application/json");
+    //.Produces(200, "application/json");
+    //.Produces(200);
+```
+
+## Cors<sup>`[C|M]`</sup>
+Specifies one or more cors policies that will be applied to endpoint/group.
+If not specified the default policy will be applied.
+Can be used  multiple times for diferent policies.
+```csharp
+[Get]
+[Cors("MyCorsPolicy")]
+//[Cors]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .RequireCors("MyCorsPolicy");
+    //.RequireCors();
 ```
 
 ## 🧪 Requirements
