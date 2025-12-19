@@ -1,4 +1,5 @@
 using EZ.MinimalApi.Attributes;
+using EZ.MinimalApi.Generator.Diagnostics;
 using EZ.MinimalApi.Generator.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -6,6 +7,7 @@ using Microsoft.CodeAnalysis.Text;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,94 +23,152 @@ namespace EZ.MinimalApi.Generator
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             var provider = context.SyntaxProvider.CreateSyntaxProvider(
-                predicate: static (node, _) =>
-                    node is ClassDeclarationSyntax cds && cds.AttributeLists.Count > 0,
-                transform: static (ctx, _) => TransformClass(ctx))
-                .Where(static x => x is not null);
+                predicate: static (node, _) => 
+                    node is ClassDeclarationSyntax cds && 
+                    cds.AttributeLists.Count > 0 &&
+                    cds.AttributeLists.Any(al => al.Attributes.Any(a => 
+                        a.Name.ToString().Contains("Endpoint"))
+                    ),
+                transform: static (ctx, _) => TransformClass(ctx)
+            )
+            .Where(static x => x is not null);
 
-            context.RegisterSourceOutput(provider.Collect(), (spc, classes) =>
+            context.RegisterSourceOutput(provider.Collect(), (spc, results) =>
             {
-                var list = classes.Where(c => c != null).Cast<ClassInfo>().ToList();
+                var diagnostics = results.Where(r => r!.Diagnostics != null).SelectMany(r => r!.Diagnostics).ToList();
 
-                if (list.Count == 0)
+                if(diagnostics.Count > 0)
+                {
+                    ReportDiagnostics(spc, diagnostics);   
                     return;
+                }
 
-                GenerateFiles(spc, list);
-                GenerateAggregator(spc, list);
+                var classes = results.Where(r => r.ClassInfo != null).Select(r => r.ClassInfo!).ToList();
+
+                if (classes.Count == 0)
+                    return;
+    
+                GenerateFiles(spc, classes);
+                GenerateAggregator(spc, classes);
             });
         }
 
-        private static ClassInfo? TransformClass(GeneratorSyntaxContext ctx)
+        private void ReportDiagnostics(SourceProductionContext spc, List<DiagnosticResult> diagnostics)
         {
+            foreach (var diagnostic in diagnostics)
+                spc.ReportDiagnostic(Diagnostic.Create(diagnostic.Descriptor, diagnostic.Location, diagnostic.MessageParameters));
+        }
+
+        private static TransformResult? TransformClass(GeneratorSyntaxContext ctx)
+        {
+            var diagnostics = ImmutableArray.CreateBuilder<DiagnosticResult>();
+            var result = new TransformResult();
+
             var classDeclaration = (ClassDeclarationSyntax)ctx.Node;
             var semanticModel = ctx.SemanticModel;
             var classSymbol = semanticModel.GetDeclaredSymbol(classDeclaration) as INamedTypeSymbol;
 
-            if (classSymbol == null || !classSymbol.IsStatic)
-                return null;
+            if(classSymbol == null)
+                return result;
 
-            var hasEndpoint = classSymbol.GetAttributes()
-                .Any(a => a.AttributeClass?.Name == nameof(EndpointAttribute));
+            if (!classSymbol.IsStatic)
+            {
+                diagnostics.Add(new DiagnosticResult
+                {
+                    Location = classSymbol.Locations.First() ?? Location.None,
+                    Descriptor = ClassDiagnosticRules.ClassMustBeStaticRule,
+                    MessageParameters = new[] { classSymbol.Name }
+                });
+            }
 
-            if (!hasEndpoint)
-                return null;
+            var methodDeclarations = classDeclaration.Members.OfType<MethodDeclarationSyntax>().Where(m =>
+                m.AttributeLists.Count > 0 &&
+                m.AttributeLists.Any(al => al.Attributes.Any(a =>
+                    a.Name.ToString().Contains("Get") ||
+                    a.Name.ToString().Contains("Post") ||
+                    a.Name.ToString().Contains("Put") ||
+                    a.Name.ToString().Contains("Patch") ||
+                    a.Name.ToString().Contains("Delete")
+                )
+            ));
 
+            if(methodDeclarations == null || methodDeclarations.Count() == 0)
+            {
+                diagnostics.Add(new DiagnosticResult
+                {
+                    Location = classSymbol.Locations.First() ?? Location.None,
+                    Descriptor = ClassDiagnosticRules.ClassIsEmptyRule,
+                    MessageParameters = new[] { classSymbol.Name }
+                });
+
+                result.Diagnostics = diagnostics.ToImmutable();
+                
+                return result;
+            }
+            
             var methods = new List<MethodInfo>();
 
-            foreach (var methodDeclaration in classDeclaration.Members.OfType<MethodDeclarationSyntax>())
+            foreach (var methodDeclaration in methodDeclarations)
             {
                 var methodSymbol = semanticModel.GetDeclaredSymbol(methodDeclaration) as IMethodSymbol;
 
                 if (methodSymbol == null)
                     continue;
 
-                var methodInfo = GetMethodInfo(methodSymbol, methodDeclaration);
+                if (methodDeclaration.Body == null && methodDeclaration.ExpressionBody == null)
+                {
+                    diagnostics.Add(new DiagnosticResult
+                    {
+                        Location = methodSymbol.Locations.First() ?? Location.None,
+                        Descriptor = MethodDiagnosticRules.MethodMustHaveBodyRule,
+                        MessageParameters = new[] { methodSymbol.Name }
+                    });
 
-                if (methodInfo != null)
-                    methods.Add(methodInfo);
+                    continue;
+                }
+
+                var httpAttributes = methodSymbol.GetAttributes().Where(a =>
+                    a.AttributeClass?.Name == nameof(GetAttribute) ||
+                    a.AttributeClass?.Name == nameof(PostAttribute) ||
+                    a.AttributeClass?.Name == nameof(PutAttribute) ||
+                    a.AttributeClass?.Name == nameof(PatchAttribute) ||
+                    a.AttributeClass?.Name == nameof(DeleteAttribute)
+                );
+
+                if(httpAttributes.Count() > 1)
+                {
+                    diagnostics.Add(new DiagnosticResult
+                    {
+                        Location = methodSymbol.Locations.First() ?? Location.None,
+                        Descriptor = MethodDiagnosticRules.MethodMustHaveOnlyOneAttributeRule,
+                        MessageParameters = new[] { methodSymbol.Name }
+                    });
+
+                    continue;
+                }
+
+                var httpAttribute = httpAttributes.FirstOrDefault();
+                var route = httpAttribute.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? "/";
+            
+                methods.Add(new MethodInfo
+                {
+                    MethodName = methodSymbol.Name,
+                    HttpMethod = httpAttribute.AttributeClass!.Name.Replace("Attribute", ""),
+                    Route = route,
+                    Attributes = methodSymbol.GetAttributes()
+                });
             }
 
-            if (methods.Count == 0)
-                return null;
-
-            return new ClassInfo
+            result.Diagnostics = diagnostics.ToImmutable();
+            result.ClassInfo = new ClassInfo
             {
                 Namespace = classSymbol.ContainingNamespace.ToDisplayString(),
                 Name = classSymbol.Name,
                 Methods = methods,
                 Attributes = classSymbol.GetAttributes()
             };
-        }
 
-        private static MethodInfo? GetMethodInfo(IMethodSymbol methodSymbol, MethodDeclarationSyntax methodDeclaration)
-        {
-            var methodAttributes = methodSymbol.GetAttributes();
-
-            var httpAttributes = methodAttributes.FirstOrDefault(a =>
-                a.AttributeClass?.Name == nameof(GetAttribute) ||
-                a.AttributeClass?.Name == nameof(PostAttribute) ||
-                a.AttributeClass?.Name == nameof(PutAttribute) ||
-                a.AttributeClass?.Name == nameof(PatchAttribute) ||
-                a.AttributeClass?.Name == nameof(DeleteAttribute)
-            );
-
-            if (httpAttributes == null)
-                return null;
-
-            var hasBody = methodDeclaration.Body != null || methodDeclaration.ExpressionBody != null;
-
-            if (!hasBody)
-                return null;
-            
-            var route = httpAttributes.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? "/";
-            
-            return new MethodInfo
-            {
-                MethodName = methodSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                HttpMethod = httpAttributes.AttributeClass!.Name.Replace("Attribute", ""),
-                Route = route,
-                Attributes = methodAttributes
-            };
+            return result;
         }
 
         private static AuthorizationInfo? GetAuthorizationInfo(ImmutableArray<AttributeData> attributes)
@@ -187,6 +247,52 @@ namespace EZ.MinimalApi.Generator
                 .ToList();
         }
 
+        private static List<ProducesInfo> GetProduces(ImmutableArray<AttributeData> attributes)
+        {
+            var fullyQualifiedName = "EZ.MinimalApi.Attributes.ProducesAttribute";
+
+            var producesAttributes = attributes
+                .Where(a => a.AttributeClass?.ToDisplayString() == fullyQualifiedName)
+                .ToList();
+
+            var producesList = new List<ProducesInfo>();
+
+            foreach (var producesAttribute in producesAttributes)
+            {
+                int statusCode = 0;
+                string? requestType = null;
+                string? contentType = null;
+
+                if (producesAttribute.AttributeClass.IsGenericType)
+                {
+                    requestType = producesAttribute.AttributeClass.TypeArguments.First().ToDisplayString(FullyQualifiedWithoutGlobal);
+                    statusCode = (int)(producesAttribute.ConstructorArguments[0].Value ?? 0);
+                    contentType = producesAttribute.ConstructorArguments[1].Value?.ToString();
+                }
+                else
+                {
+                    statusCode = (int)(producesAttribute.ConstructorArguments[0].Value ?? 0);
+                    contentType = producesAttribute.ConstructorArguments[2].Value?.ToString();
+
+                    var typeParameter = producesAttribute.ConstructorArguments[1];
+
+                    if(!typeParameter.IsNull)
+                        requestType = (typeParameter.Value as ITypeSymbol)!.ToDisplayString(FullyQualifiedWithoutGlobal);
+                }
+
+                var producesInfo = new ProducesInfo
+                {
+                    StatusCode = statusCode,
+                    ResponseType = requestType,
+                    ContentType = contentType
+                };
+
+                producesList.Add(producesInfo);
+            }
+
+            return producesList;
+        }
+        
         private static string[]? GetTags(ImmutableArray<AttributeData> attributes)
         {
             var tagAttribute = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(TagsAttribute));
@@ -284,6 +390,25 @@ namespace EZ.MinimalApi.Generator
             return acceptsList;
         }
         
+        private static List<string?> GetCors(ImmutableArray<AttributeData> attributes)
+        {
+            var fullyQualifiedName = "EZ.MinimalApi.Attributes.CorsAttribute";
+            
+            var corsAttributes = attributes
+                .Where(a => a.AttributeClass?.ToDisplayString() == fullyQualifiedName)
+                .ToList();
+
+            var corsPolicies = new List<string?>();
+
+            foreach (var corsAttribute in corsAttributes)
+            {
+                var policyName = corsAttribute.ConstructorArguments[0].Value?.ToString();
+                corsPolicies.Add(policyName);
+            }
+
+            return corsPolicies;
+        }
+
         private static void GenerateFiles(SourceProductionContext context, List<ClassInfo> classes)
         {
             foreach (var @class in classes)
@@ -356,7 +481,7 @@ namespace EZ.MinimalApi.Generator
             using var writer = new IndentedTextWriter(sw, "\t");
             writer.WriteLine("using Microsoft.AspNetCore.Builder;");
             writer.WriteLine();
-            writer.WriteLine("namespace EZ.MinimalApi.Extensions");
+            writer.WriteLine("namespace Microsoft.AspNetCore.Builder");
             writer.WriteLine("{");
             writer.Indent++;
             writer.WriteLine("public static class WebApplicationAggregatorExtensions");
@@ -391,6 +516,8 @@ namespace EZ.MinimalApi.Generator
             AppendAuthorization(writer, GetAuthorizationInfo(attributes));
             AppendAllowAnonymous(writer, GetAllowAnonymous(attributes));
             AppendDisplayName(writer, GetDisplayName(attributes));
+            AppendProduces(writer, GetProduces(attributes));
+            AppendCors(writer, GetCors(attributes));
         }
 
         private static void AppendAuthorization(IndentedTextWriter writer, AuthorizationInfo? authorization)
@@ -496,6 +623,49 @@ namespace EZ.MinimalApi.Generator
                 writer.WriteLine($".Accepts<{accepts.RequestType}>(\"{accepts.ContentType}\" {contentTypes})");
             }
         }
+        
+        private static void AppendProduces(IndentedTextWriter writer, List<ProducesInfo> producesList)
+        {
+            if(producesList == null)
+                return;
+
+            foreach (var produces in producesList)
+            {
+                var contentType = "";
+                    
+                if(string.IsNullOrEmpty(produces.ResponseType))
+                {
+                    if(!string.IsNullOrEmpty(produces.ContentType))
+                        contentType = $", contentType: \"{produces.ContentType}\"";
+                    
+                    writer.WriteLine($".Produces({produces.StatusCode}{contentType})");
+                }
+                else
+                {
+                    if(!string.IsNullOrEmpty(produces.ContentType))
+                        contentType = $", \"{produces.ContentType}\"";
+                    
+                    writer.WriteLine($".Produces<{produces.ResponseType}>({produces.StatusCode}{contentType})");
+                }
+            }
+        }
+        
+        private static void AppendCors(IndentedTextWriter writer, List<string> corsPolicies)
+        {
+            if(corsPolicies == null)
+                return;
+
+            foreach (var policy in corsPolicies)
+            {
+                var policyName = "";
+
+                if (!string.IsNullOrEmpty(policy))
+                    policyName = $"\"{EscapeString(policy)}\"";
+                    
+                writer.WriteLine($".RequireCors({policyName})");
+            }
+        }
+
         private static string EscapeString(string input) =>
             input?.Replace("\\", "\\\\").Replace("\"", "\\\"") ?? "";
     }
