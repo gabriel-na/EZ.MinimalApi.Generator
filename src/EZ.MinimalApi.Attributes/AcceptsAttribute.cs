@@ -7,20 +7,20 @@ public class AcceptsAttribute : Attribute
 {
     public Type RequestType { get; }
     public string ContentType { get; set; }
-    public string[] AddtionalContentTypes { get; set; }
+    public string[] AdditionalContentTypes { get; set; }
 
-    public AcceptsAttribute(Type requestType, string contentType, params string[] addtionalContentTypes)
+    public AcceptsAttribute(Type requestType, string contentType, params string[] additionalContentTypes)
     {
         RequestType = requestType;
         ContentType = contentType;
-        AddtionalContentTypes = addtionalContentTypes;
+        AdditionalContentTypes = additionalContentTypes;
     }
 }
 
 public class AcceptsAttribute<TRequest> : AcceptsAttribute
 {
-    public AcceptsAttribute(string contentType, params string[] addtionalContentTypes)
-        : base(typeof(TRequest), contentType, addtionalContentTypes)
+    public AcceptsAttribute(string contentType, params string[] additionalContentTypes)
+        : base(typeof(TRequest), contentType, additionalContentTypes)
     {
     }
 }

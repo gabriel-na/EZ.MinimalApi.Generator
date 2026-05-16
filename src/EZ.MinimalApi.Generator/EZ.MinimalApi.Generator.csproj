@@ -13,7 +13,7 @@
 
 	<PropertyGroup>
 		<PackageId>EZ.MinimalApi.Generator</PackageId>
-		<Version>1.2.0</Version>
+		<Version>1.3.0</Version>
 		<Authors>Gabriel Albuquerque</Authors>
 		<Description>Minimal API Source Generator for automatic endpoint mapping.</Description>
 		<PackageTags>source-generator;minimal-api;dotnet;webapi;code-generator</PackageTags>

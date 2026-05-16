@@ -1,4 +1,37 @@
-﻿# 🚀 v1.2.0
+﻿# 🚀 v1.3.0
+
+**[New]**
+- `FallbackAttribute`: Catch-all route via `MapFallback(handler)` (no route parameter when default)
+- `ExcludeFromDescriptionAttribute`: Hides endpoint from OpenAPI/Swagger
+- `ProducesProblemAttribute`: ProblemDetails response configuration
+- `EnableRateLimitingAttribute` / `DisableRateLimitingAttribute`: Rate limiting support
+- `CacheOutputAttribute` / `DisableOutputCacheAttribute`: Output caching support
+- `RequestSizeLimitAttribute` / `DisableRequestSizeLimitAttribute`: Request body size limits
+- `EndpointGroupNameAttribute`: Sets OpenAPI group name without affecting routing
+- `SkipStatusCodePagesAttribute`: Skips status code pages middleware per endpoint
+- `RequestTimeoutAttribute` / `DisableRequestTimeoutAttribute`: Per-endpoint request timeouts (.NET 8+)
+- Sample project at `samples/EZ.MinimalApi.Sample` with all attributes in use
+- Test project at `tests/EZ.MinimalApi.Generator.Tests` with 9+ tests
+
+**[Fix]**
+- **EZ0003** (`MethodMustBeStaticRule`): Now correctly validates that endpoint methods are `static` (was defined but never checked)
+- `AuthorizationAttribute`: Added `params string[]` constructor for multiple policies (`[Authorization("Admin", "SuperUser")]`)
+- `CorsAttribute`: Replaced single-policy constructor with `params string[]` (`[Cors("P1", "P2")]`)
+- `AcceptsAttribute.AddtionalContentTypes`: Fixed typo → `AdditionalContentTypes`
+- `ProducessAttribute.cs`: Renamed to `ProducesAttribute.cs`
+
+**[Changed]**
+- Generated files now conditionally add `using Microsoft.AspNetCore.RateLimiting;` when rate limiting attributes are used
+- Generated files now conditionally add `using Microsoft.AspNetCore.OutputCaching;` when output caching attributes are used
+- Generated files now conditionally add `using Microsoft.AspNetCore.Http.Timeouts;` when request timeout attributes are used
+
+## ⬇️ How to update
+
+```bash
+dotnet add package EZ.MinimalApi --version 1.3.0
+```
+
+# 🚀 v1.2.0
 
 **[New]** 
 - `ProducesAttribute`: Specifies which status code the endpoint/group will return and for which response type.
