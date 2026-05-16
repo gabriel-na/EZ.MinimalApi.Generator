@@ -9,13 +9,18 @@ namespace EZ.MinimalApi.Attributes
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class AuthorizationAttribute : Attribute
     {
-        public string PolicyName { get; }
+        public string[] PolicyNames { get; }
         public IAuthorizeData[] AuthorizeData { get; set; }
         public AuthorizationPolicy AuthorizationPolicy { get; set; }
 
         public AuthorizationAttribute(string policyName)
         {
-            PolicyName = policyName ?? throw new ArgumentNullException(nameof(policyName));
+            PolicyNames = new[] { policyName ?? throw new ArgumentNullException(nameof(policyName)) };
+        }
+
+        public AuthorizationAttribute(params string[] policyNames)
+        {
+            PolicyNames = policyNames ?? throw new ArgumentNullException(nameof(policyNames));
         }
 
         public AuthorizationAttribute(IAuthorizeData[] authorizeData)

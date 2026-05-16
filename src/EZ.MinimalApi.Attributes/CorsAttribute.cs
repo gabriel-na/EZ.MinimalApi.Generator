@@ -5,10 +5,15 @@ namespace EZ.MinimalApi.Attributes;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public class CorsAttribute : Attribute
 {
-    public string? PolicyName { get; }
+    public string[] PolicyNames { get; }
 
-    public CorsAttribute(string? policyName = null)
+    public CorsAttribute()
     {
-        PolicyName = policyName;
+        PolicyNames = Array.Empty<string>();
+    }
+
+    public CorsAttribute(params string[] policyNames)
+    {
+        PolicyNames = policyNames ?? Array.Empty<string>();
     }
 }

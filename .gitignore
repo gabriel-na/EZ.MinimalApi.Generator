@@ -46,6 +46,9 @@ bld/
 # Visual Studio 2017 auto generated files
 Generated\ Files/
 
+# Source generator emitted files (sample project)
+samples/EZ.MinimalApi.Sample/Generated/
+
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*

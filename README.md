@@ -16,7 +16,7 @@ Some attributes can only be used at class level (`[C]`), method level (`[M]`) or
 
 ## ✨ Features
 
-- `Get`, `Post`, `Put`, `Patch`, `Delete` attributes for routing  
+- `Get`, `Post`, `Put`, `Patch`, `Delete`, `Fallback` attributes for routing  
 - `Endpoint` attribute to register endpoint classes  
 - Automatic group mapping via `GroupEndpoint`  
 - Inline delegate generation (no instance creation required)  
@@ -26,10 +26,34 @@ Some attributes can only be used at class level (`[C]`), method level (`[M]`) or
   - Filters
   - Tags
   - Accepts
-  - AllowAnonynous
+  - AllowAnonymous
+  - Produces / ProducesProblem
+  - Cors
+  - ExcludeFromDescription
+  - Rate Limiting (EnableRateLimiting / DisableRateLimiting)
+  - Output Caching (CacheOutput / DisableOutputCache)
+  - Request Size Limit (RequestSizeLimit / DisableRequestSizeLimit)
+  - Endpoint Group Name
+  - SkipStatusCodePages
+  - Request Timeout (RequestTimeout / DisableRequestTimeout)
 - Fully compile-time, no reflection
 
 ---
+
+## 📁 Sample Project
+
+A complete sample project is available at [`samples/EZ.MinimalApi.Sample`](./samples/EZ.MinimalApi.Sample) demonstrating all attributes in a real Minimal API application.
+
+Run it with:
+```sh
+dotnet run --project samples/EZ.MinimalApi.Sample
+```
+
+Tests are in [`tests/EZ.MinimalApi.Generator.Tests`](./tests/EZ.MinimalApi.Generator.Tests) with 9+ test cases covering endpoint generation, attributes, and compilation validation:
+
+```sh
+dotnet test tests/EZ.MinimalApi.Generator.Tests
+```
 
 ## 📦 Installation
 
@@ -252,19 +276,23 @@ ap.MapGet("/", ...)
     .AllowAnonymous();
 ```
 
-## AllowAnonymous<sup>`[C|M]`</sup>
-Specifies if the group or endpoint can be accessed without authentication/authorization
+## Fallback<sup>`[M]`</sup>
+Maps a catch-all route for requests that don't match any other endpoint.
+When no route is specified, it generates `MapFallback(handler)` without a route parameter (catch-all for any path).
 ```csharp
-[Get]
-[AllowAnonymous]
-public static IResult Get() =>
+[Fallback]                  // catch-all for any path
+public static IResult CatchAll() =>
     Results.Ok();
+
+[Fallback("/{**rest}")]     // catch-all with custom pattern
+public static IResult CatchAllWithPattern(string rest) =>
+    Results.Ok($"Fallback: {rest}");
 ```
 
 Generated:
 ```csharp
-ap.MapGet("/", ...)
-    .AllowAnonymous();
+app.MapFallback(MyNamespace.MyEndpoints.CatchAll);
+app.MapFallback("/{**rest}", MyNamespace.MyEndpoints.CatchAllWithPattern);
 ```
 
 ## Produces<sup>`[C|M]`</sup>
@@ -292,11 +320,12 @@ ap.MapGet("/", ...)
 ## Cors<sup>`[C|M]`</sup>
 Specifies one or more cors policies that will be applied to endpoint/group.
 If not specified the default policy will be applied.
-Can be used  multiple times for diferent policies.
+Can be used multiple times.
 ```csharp
 [Get]
-[Cors("MyCorsPolicy")]
-//[Cors]
+[Cors]                       // default policy
+[Cors("MyCorsPolicy")]       // single policy
+[Cors("Policy1", "Policy2")] // multiple policies
 public static IResult Get() =>
     Results.Ok();
 ```
@@ -304,12 +333,165 @@ public static IResult Get() =>
 Generated:
 ```csharp
 ap.MapGet("/", ...)
-    .RequireCors("MyCorsPolicy");
-    //.RequireCors();
+    .RequireCors()
+    .RequireCors("MyCorsPolicy")
+    .RequireCors("Policy1")
+    .RequireCors("Policy2");
 ```
+
+## ExcludeFromDescription<sup>`[C|M]`</sup>
+Hides the endpoint or group from OpenAPI/Swagger documentation.
+```csharp
+[Get]
+[ExcludeFromDescription]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .ExcludeFromDescription();
+```
+
+## ProducesProblem<sup>`[C|M]`</sup>
+Specifies that the endpoint returns a ProblemDetails response for the given status code.
+Can be used multiple times for different status codes.
+```csharp
+[Get]
+[ProducesProblem(400)]
+[ProducesProblem<ValidationError>(422)]
+[ProducesProblem(500, typeof(ErrorResponse), "application/json")]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .ProducesProblem(400)
+    .ProducesProblem<ValidationError>(422)
+    .ProducesProblem<ErrorResponse>(500, "application/json");
+```
+
+## Rate Limiting<sup>`[C|M]`</sup>
+Applies rate limiting policies to endpoints or groups.
+```csharp
+[EnableRateLimiting("FixedWindow")]  // applies a named policy
+[DisableRateLimiting]                // disables rate limiting
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .RequireRateLimiting("FixedWindow");
+// or
+ap.MapGet("/", ...)
+    .DisableRateLimiting();
+```
+
+**Note:** Rate limiting requires the `Microsoft.AspNetCore.RateLimiting` package in your project.
+
+## Output Caching<sup>`[C|M]`</sup>
+Caches responses for the endpoint or group.
+```csharp
+[CacheOutput]                       // default cache profile
+[CacheOutput("MyPolicy")]           // named policy
+[DisableOutputCache]                // disable caching
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .CacheOutput()
+    .CacheOutput("MyPolicy")
+    .DisableOutputCache();
+```
+
+**Note:** Output caching requires the `Microsoft.AspNetCore.OutputCaching` package in your project.
+
+## Request Size Limit<sup>`[C|M]`</sup>
+Limits the request body size for endpoints or groups.
+```csharp
+[RequestSizeLimit(30_000_000)]       // 30 MB limit
+[DisableRequestSizeLimit]            // no limit
+public static IResult Upload() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .RequireRequestSizeLimit(30000000)
+    .DisableRequestSizeLimit();
+```
+
+## Endpoint Group Name<sup>`[C|M]`</sup>
+Sets the endpoint group name for OpenAPI/Swagger organization.
+Unlike `[GroupEndpoint]`, this does not affect routing — it only tags the endpoint with a group name for documentation purposes.
+```csharp
+[EndpointGroupName("Users")]
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .WithGroupName("Users");
+```
+
+## SkipStatusCodePages<sup>`[C|M]`</sup>
+Skips the status code pages middleware for this endpoint or group.
+Useful for API endpoints that return error status codes and don't want them intercepted by error pages.
+```csharp
+[SkipStatusCodePages]
+public static IResult Get() =>
+    Results.NotFound();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .SkipStatusCodePages();
+```
+
+## Request Timeout<sup>`[C|M]`</sup>
+Sets a per-endpoint request timeout. Available in .NET 8+.
+```csharp
+[RequestTimeout(5000)]                 // 5 seconds (in milliseconds)
+[RequestTimeout("MyPolicy")]           // named timeout policy
+[DisableRequestTimeout]                // disable timeout
+public static IResult Get() =>
+    Results.Ok();
+```
+
+Generated:
+```csharp
+ap.MapGet("/", ...)
+    .RequireRequestTimeout(TimeSpan.FromMilliseconds(5000))
+    .RequireRequestTimeout("MyPolicy")
+    .DisableRequestTimeout();
+```
+
+**Note:** Request timeout requires .NET 8 or higher.
 
 ## 🧪 Requirements
 
 - .NET 7 or higher
 - Source generator built with .NET Standard 2.1
 - Roslyn 4.x analyzers included automatically
+
+---
+
+## 🛠️ Fixes & Improvements in this version
+
+- **MethodMustBeStaticRule (EZ0003)** — Now correctly validates that endpoint methods are `static`
+- **AuthorizationAttribute** — Added `params string[]` constructor for multiple policies: `[Authorization("Admin", "SuperUser")]`
+- **Typos fixed**: `AddtionalContentTypes` → `AdditionalContentTypes`, `ProducessAttribute.cs` → `ProducesAttribute.cs`
+- **New attributes**: `[Fallback]`, `[ExcludeFromDescription]`, `[ProducesProblem]`, `[EnableRateLimiting]`, `[DisableRateLimiting]`, `[CacheOutput]`, `[DisableOutputCache]`, `[RequestSizeLimit]`, `[DisableRequestSizeLimit]`, `[EndpointGroupName]`, `[SkipStatusCodePages]`, `[RequestTimeout]`, `[DisableRequestTimeout]`
+- **CorsAttribute** — Added `params string[]` constructor: `[Cors("P1", "P2")]`

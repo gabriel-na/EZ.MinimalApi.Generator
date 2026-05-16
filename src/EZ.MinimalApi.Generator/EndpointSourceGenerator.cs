@@ -81,6 +81,9 @@ namespace EZ.MinimalApi.Generator
                 });
             }
 
+            if (diagnostics.Count > 0)
+                return new TransformResult { Diagnostics = diagnostics.ToImmutable() };
+
             var methodDeclarations = classDeclaration.Members.OfType<MethodDeclarationSyntax>().Where(m =>
                 m.AttributeLists.Count > 0 &&
                 m.AttributeLists.Any(al => al.Attributes.Any(a =>
@@ -88,7 +91,8 @@ namespace EZ.MinimalApi.Generator
                     a.Name.ToString().Contains("Post") ||
                     a.Name.ToString().Contains("Put") ||
                     a.Name.ToString().Contains("Patch") ||
-                    a.Name.ToString().Contains("Delete")
+                    a.Name.ToString().Contains("Delete") ||
+                    a.Name.ToString().Contains("Fallback")
                 )
             ));
 
@@ -127,12 +131,25 @@ namespace EZ.MinimalApi.Generator
                     continue;
                 }
 
+                if (!methodSymbol.IsStatic)
+                {
+                    diagnostics.Add(new DiagnosticResult
+                    {
+                        Location = methodSymbol.Locations.First() ?? Location.None,
+                        Descriptor = MethodDiagnosticRules.MethodMustBeStaticRule,
+                        MessageParameters = new[] { methodSymbol.Name }
+                    });
+
+                    continue;
+                }
+
                 var httpAttributes = methodSymbol.GetAttributes().Where(a =>
                     a.AttributeClass?.Name == nameof(GetAttribute) ||
                     a.AttributeClass?.Name == nameof(PostAttribute) ||
                     a.AttributeClass?.Name == nameof(PutAttribute) ||
                     a.AttributeClass?.Name == nameof(PatchAttribute) ||
-                    a.AttributeClass?.Name == nameof(DeleteAttribute)
+                    a.AttributeClass?.Name == nameof(DeleteAttribute) ||
+                    a.AttributeClass?.Name == nameof(FallbackAttribute)
                 );
 
                 if(httpAttributes.Count() > 1)
@@ -390,7 +407,7 @@ namespace EZ.MinimalApi.Generator
             return acceptsList;
         }
         
-        private static List<string?> GetCors(ImmutableArray<AttributeData> attributes)
+        private static List<string> GetCors(ImmutableArray<AttributeData> attributes)
         {
             var fullyQualifiedName = "EZ.MinimalApi.Attributes.CorsAttribute";
             
@@ -398,12 +415,33 @@ namespace EZ.MinimalApi.Generator
                 .Where(a => a.AttributeClass?.ToDisplayString() == fullyQualifiedName)
                 .ToList();
 
-            var corsPolicies = new List<string?>();
+            var corsPolicies = new List<string>();
 
             foreach (var corsAttribute in corsAttributes)
             {
-                var policyName = corsAttribute.ConstructorArguments[0].Value?.ToString();
-                corsPolicies.Add(policyName);
+                if (corsAttribute.ConstructorArguments.Length == 0)
+                {
+                    corsPolicies.Add("");
+                    continue;
+                }
+
+                var arg = corsAttribute.ConstructorArguments[0];
+
+                if (arg.Kind == TypedConstantKind.Array)
+                {
+                    foreach (var value in arg.Values)
+                    {
+                        var policyName = value.Value?.ToString();
+                        if (!string.IsNullOrEmpty(policyName))
+                            corsPolicies.Add(policyName);
+                    }
+                }
+                else
+                {
+                    var policyName = arg.Value?.ToString();
+                    if (!string.IsNullOrEmpty(policyName))
+                        corsPolicies.Add(policyName);
+                }
             }
 
             return corsPolicies;
@@ -419,6 +457,16 @@ namespace EZ.MinimalApi.Generator
                 writer.WriteLine("using Microsoft.AspNetCore.Builder;");
                 writer.WriteLine("using Microsoft.AspNetCore.Http;");
                 writer.WriteLine("using Microsoft.AspNetCore.Authorization;");
+
+                if (HasRateLimitingAttributes(@class))
+                    writer.WriteLine("using Microsoft.AspNetCore.RateLimiting;");
+
+                if (HasOutputCachingAttributes(@class))
+                    writer.WriteLine("using Microsoft.AspNetCore.OutputCaching;");
+
+                if (HasRequestTimeoutAttributes(@class))
+                    writer.WriteLine("using Microsoft.AspNetCore.Http.Timeouts;");
+
                 writer.WriteLine();
                 writer.WriteLine($"namespace EZ.MinimalApi.GeneratedEndpoints");
                 writer.WriteLine("{");
@@ -450,8 +498,13 @@ namespace EZ.MinimalApi.Generator
                 foreach (var method in @class.Methods)
                 {
                     var handler = $"{@class.Namespace}.{@class.Name}.{method.MethodName}" ;
+                    var isFallbackDefault = method.HttpMethod == "Fallback" && method.Route == "/";
 
-                    writer.WriteLine($"{root}.Map{method.HttpMethod}(\"{EscapeString(method.Route)}\", {handler})");
+                    var mapCall = isFallbackDefault
+                        ? $"{root}.Map{method.HttpMethod}({handler})"
+                        : $"{root}.Map{method.HttpMethod}(\"{EscapeString(method.Route)}\", {handler})";
+
+                    writer.WriteLine(mapCall);
                     writer.Indent++;
                     
                     AppendCommonMethods(writer, method.Attributes);
@@ -517,7 +570,15 @@ namespace EZ.MinimalApi.Generator
             AppendAllowAnonymous(writer, GetAllowAnonymous(attributes));
             AppendDisplayName(writer, GetDisplayName(attributes));
             AppendProduces(writer, GetProduces(attributes));
+            AppendProducesProblem(writer, GetProducesProblem(attributes));
             AppendCors(writer, GetCors(attributes));
+            AppendExcludeFromDescription(writer, GetExcludeFromDescription(attributes));
+            AppendRateLimiting(writer, GetEnableRateLimiting(attributes), GetDisableRateLimiting(attributes));
+            AppendCacheOutput(writer, GetCacheOutput(attributes), GetDisableOutputCache(attributes));
+            AppendRequestSizeLimit(writer, GetRequestSizeLimit(attributes), GetDisableRequestSizeLimit(attributes));
+            AppendEndpointGroupName(writer, GetEndpointGroupName(attributes));
+            AppendSkipStatusCodePages(writer, GetSkipStatusCodePages(attributes));
+            AppendRequestTimeout(writer, GetRequestTimeout(attributes), GetDisableRequestTimeout(attributes));
         }
 
         private static void AppendAuthorization(IndentedTextWriter writer, AuthorizationInfo? authorization)
@@ -664,6 +725,277 @@ namespace EZ.MinimalApi.Generator
                     
                 writer.WriteLine($".RequireCors({policyName})");
             }
+        }
+
+        private static bool GetExcludeFromDescription(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(ExcludeFromDescriptionAttribute));
+        }
+
+        private static void AppendExcludeFromDescription(IndentedTextWriter writer, bool excludeFromDescription)
+        {
+            if (excludeFromDescription)
+                writer.WriteLine($".ExcludeFromDescription()");
+        }
+
+        private static List<ProducesInfo> GetProducesProblem(ImmutableArray<AttributeData> attributes)
+        {
+            var fullyQualifiedName = "EZ.MinimalApi.Attributes.ProducesProblemAttribute";
+
+            var producesProblemAttributes = attributes
+                .Where(a => a.AttributeClass?.ToDisplayString() == fullyQualifiedName ||
+                            (a.AttributeClass?.IsGenericType == true &&
+                             a.AttributeClass?.ToDisplayString().StartsWith(fullyQualifiedName) == true))
+                .ToList();
+
+            var producesList = new List<ProducesInfo>();
+
+            foreach (var attr in producesProblemAttributes)
+            {
+                int statusCode = 0;
+                string? responseType = null;
+                string? contentType = null;
+
+                if (attr.AttributeClass!.IsGenericType)
+                {
+                    responseType = attr.AttributeClass.TypeArguments.First().ToDisplayString(FullyQualifiedWithoutGlobal);
+                    statusCode = (int)(attr.ConstructorArguments[0].Value ?? 0);
+                    contentType = attr.ConstructorArguments[1].Value?.ToString();
+                }
+                else
+                {
+                    statusCode = (int)(attr.ConstructorArguments[0].Value ?? 0);
+                    contentType = attr.ConstructorArguments[2].Value?.ToString();
+
+                    var typeParameter = attr.ConstructorArguments[1];
+                    if (!typeParameter.IsNull)
+                        responseType = (typeParameter.Value as ITypeSymbol)!.ToDisplayString(FullyQualifiedWithoutGlobal);
+                }
+
+                producesList.Add(new ProducesInfo
+                {
+                    StatusCode = statusCode,
+                    ResponseType = responseType,
+                    ContentType = contentType
+                });
+            }
+
+            return producesList;
+        }
+
+        private static void AppendProducesProblem(IndentedTextWriter writer, List<ProducesInfo> producesList)
+        {
+            if (producesList == null || producesList.Count == 0)
+                return;
+
+            foreach (var produces in producesList)
+            {
+                var contentType = "";
+
+                if (string.IsNullOrEmpty(produces.ResponseType))
+                {
+                    if (!string.IsNullOrEmpty(produces.ContentType))
+                        contentType = $", \"{produces.ContentType}\"";
+
+                    writer.WriteLine($".ProducesProblem({produces.StatusCode}{contentType})");
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(produces.ContentType))
+                        contentType = $", \"{produces.ContentType}\"";
+
+                    writer.WriteLine($".ProducesProblem<{produces.ResponseType}>({produces.StatusCode}{contentType})");
+                }
+            }
+        }
+
+        private static (bool hasAttribute, string? policyName) GetEnableRateLimiting(ImmutableArray<AttributeData> attributes)
+        {
+            var attr = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(EnableRateLimitingAttribute));
+            if (attr == null)
+                return (false, null);
+
+            var policyName = attr.ConstructorArguments.Length > 0
+                ? attr.ConstructorArguments[0].Value?.ToString()
+                : null;
+
+            return (true, policyName);
+        }
+
+        private static bool GetDisableRateLimiting(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(DisableRateLimitingAttribute));
+        }
+
+        private static bool HasRateLimitingAttributes(ClassInfo @class)
+        {
+            if (GetEnableRateLimiting(@class.Attributes).hasAttribute || GetDisableRateLimiting(@class.Attributes))
+                return true;
+
+            return @class.Methods.Any(m =>
+                GetEnableRateLimiting(m.Attributes).hasAttribute || GetDisableRateLimiting(m.Attributes));
+        }
+
+        private static void AppendRateLimiting(IndentedTextWriter writer, (bool hasAttribute, string? policyName) enable, bool disable)
+        {
+            if (enable.hasAttribute)
+            {
+                if (!string.IsNullOrEmpty(enable.policyName))
+                    writer.WriteLine($".RequireRateLimiting(\"{EscapeString(enable.policyName)}\")");
+                else
+                    writer.WriteLine($".RequireRateLimiting()");
+            }
+
+            if (disable)
+                writer.WriteLine($".DisableRateLimiting()");
+        }
+
+        private static (bool hasAttribute, string? policyName) GetCacheOutput(ImmutableArray<AttributeData> attributes)
+        {
+            var attr = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(CacheOutputAttribute));
+            if (attr == null)
+                return (false, null);
+
+            var policyName = attr.ConstructorArguments.Length > 0
+                ? attr.ConstructorArguments[0].Value?.ToString()
+                : null;
+
+            return (true, policyName);
+        }
+
+        private static bool GetDisableOutputCache(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(DisableOutputCacheAttribute));
+        }
+
+        private static bool HasOutputCachingAttributes(ClassInfo @class)
+        {
+            if (GetCacheOutput(@class.Attributes).hasAttribute || GetDisableOutputCache(@class.Attributes))
+                return true;
+
+            return @class.Methods.Any(m =>
+                GetCacheOutput(m.Attributes).hasAttribute || GetDisableOutputCache(m.Attributes));
+        }
+
+        private static void AppendCacheOutput(IndentedTextWriter writer, (bool hasAttribute, string? policyName) cache, bool disable)
+        {
+            if (disable)
+            {
+                writer.WriteLine($".DisableOutputCache()");
+                return;
+            }
+
+            if (cache.hasAttribute)
+            {
+                if (!string.IsNullOrEmpty(cache.policyName))
+                    writer.WriteLine($".CacheOutput(\"{EscapeString(cache.policyName)}\")");
+                else
+                    writer.WriteLine($".CacheOutput()");
+            }
+        }
+
+        private static (bool hasAttribute, int bytes) GetRequestSizeLimit(ImmutableArray<AttributeData> attributes)
+        {
+            var attr = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(RequestSizeLimitAttribute));
+            if (attr == null)
+                return (false, 0);
+
+            var bytes = attr.ConstructorArguments.Length > 0
+                ? (int)(attr.ConstructorArguments[0].Value ?? 0)
+                : 0;
+
+            return (true, bytes);
+        }
+
+        private static bool GetDisableRequestSizeLimit(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(DisableRequestSizeLimitAttribute));
+        }
+
+        private static void AppendRequestSizeLimit(IndentedTextWriter writer, (bool hasAttribute, int bytes) limit, bool disable)
+        {
+            if (disable)
+            {
+                writer.WriteLine($".DisableRequestSizeLimit()");
+                return;
+            }
+
+            if (limit.hasAttribute)
+                writer.WriteLine($".RequireRequestSizeLimit({limit.bytes})");
+        }
+
+        private static string? GetEndpointGroupName(ImmutableArray<AttributeData> attributes)
+        {
+            var attr = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(EndpointGroupNameAttribute));
+            return attr?.ConstructorArguments.FirstOrDefault().Value?.ToString();
+        }
+
+        private static void AppendEndpointGroupName(IndentedTextWriter writer, string? groupName)
+        {
+            if (!string.IsNullOrEmpty(groupName))
+                writer.WriteLine($".WithGroupName(\"{EscapeString(groupName)}\")");
+        }
+
+        private static bool GetSkipStatusCodePages(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(SkipStatusCodePagesAttribute));
+        }
+
+        private static void AppendSkipStatusCodePages(IndentedTextWriter writer, bool skip)
+        {
+            if (skip)
+                writer.WriteLine($".SkipStatusCodePages()");
+        }
+
+        private static (bool hasAttribute, int milliseconds, string? policyName) GetRequestTimeout(ImmutableArray<AttributeData> attributes)
+        {
+            var attr = attributes.FirstOrDefault(a => a.AttributeClass?.Name == nameof(RequestTimeoutAttribute));
+            if (attr == null)
+                return (false, 0, null);
+
+            if (attr.ConstructorArguments.Length == 0)
+                return (true, 0, null);
+
+            var arg = attr.ConstructorArguments[0];
+
+            if (arg.Kind == TypedConstantKind.Primitive && arg.Value is int ms)
+                return (true, ms, null);
+
+            if (arg.Value is string policy)
+                return (true, 0, policy);
+
+            return (true, 0, null);
+        }
+
+        private static bool GetDisableRequestTimeout(ImmutableArray<AttributeData> attributes)
+        {
+            return attributes.Any(a => a.AttributeClass?.Name == nameof(DisableRequestTimeoutAttribute));
+        }
+
+        private static bool HasRequestTimeoutAttributes(ClassInfo @class)
+        {
+            if (GetRequestTimeout(@class.Attributes).hasAttribute || GetDisableRequestTimeout(@class.Attributes))
+                return true;
+
+            return @class.Methods.Any(m =>
+                GetRequestTimeout(m.Attributes).hasAttribute || GetDisableRequestTimeout(m.Attributes));
+        }
+
+        private static void AppendRequestTimeout(IndentedTextWriter writer, (bool hasAttribute, int milliseconds, string? policyName) timeout, bool disable)
+        {
+            if (disable)
+            {
+                writer.WriteLine($".DisableRequestTimeout()");
+                return;
+            }
+
+            if (!timeout.hasAttribute)
+                return;
+
+            if (!string.IsNullOrEmpty(timeout.policyName))
+                writer.WriteLine($".RequireRequestTimeout(\"{EscapeString(timeout.policyName)}\")");
+            else if (timeout.milliseconds > 0)
+                writer.WriteLine($".RequireRequestTimeout(TimeSpan.FromMilliseconds({timeout.milliseconds}))");
         }
 
         private static string EscapeString(string input) =>
